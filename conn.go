@@ -5,10 +5,13 @@ package reconn
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net"
 	"sync"
 )
+
+var ErrOverflowed = errors.New("replay buffer overflowed")
 
 // Conn is a net.Conn that supports replaying.
 type Conn struct {
@@ -44,16 +47,22 @@ func (conn *Conn) Read(b []byte) (n int, err error) {
 		} else if n < neededForBuf {
 			toCopy = n
 		}
-		// Fill buffer
-		conn.buf.Write(b[:toCopy])
+		if toCopy > 0 {
+			// Fill buffer
+			conn.buf.Write(b[:toCopy])
+		}
 	}
 	conn.mx.Unlock()
 	return
 }
 
-// Rereader returns an io.Reader that reads from the last marked point.
-func (conn *Conn) Rereader() io.Reader {
-	return &rereader{conn}
+// Rereader returns an io.Reader that reads from the last marked point. If the
+// connection has overflowed, this returns an error.
+func (conn *Conn) Rereader() (io.Reader, error) {
+	if conn.overflowed {
+		return nil, ErrOverflowed
+	}
+	return &rereader{conn}, nil
 }
 
 type rereader struct {

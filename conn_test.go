@@ -11,7 +11,32 @@ const (
 	text = "hello world"
 )
 
-func TestReRead(t *testing.T) {
+func TestReReadOkay(t *testing.T) {
+	doTest(t, 5, func(conn net.Conn) {
+		rc := Wrap(conn, 5)
+		b := make([]byte, 5)
+
+		// Read
+		_, err := io.ReadFull(rc, b)
+		if !assert.NoError(t, err) {
+			return
+		}
+		assert.Equal(t, text[:5], string(b))
+
+		rr, err := rc.Rereader()
+		if !assert.NoError(t, err) {
+			return
+		}
+		b = make([]byte, 5)
+		_, err = io.ReadFull(rr, b)
+		if !assert.NoError(t, err) {
+			return
+		}
+		assert.Equal(t, text[:5], string(b))
+	})
+}
+
+func TestReReadOverflow(t *testing.T) {
 	doTest(t, 5, func(conn net.Conn) {
 		rc := Wrap(conn, 5)
 		b := make([]byte, len(text))
@@ -23,12 +48,8 @@ func TestReRead(t *testing.T) {
 		}
 		assert.Equal(t, text, string(b))
 
-		b = make([]byte, 5)
-		_, err = io.ReadFull(rc.Rereader(), b)
-		if !assert.NoError(t, err) {
-			return
-		}
-		assert.Equal(t, text[:5], string(b))
+		_, err = rc.Rereader()
+		assert.Equal(t, ErrOverflowed, err)
 	})
 }
 
